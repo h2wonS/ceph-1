@@ -117,6 +117,8 @@ private:
 public:
   KernelDevice(CephContext* cct, aio_callback_t cb, void *cbpriv, aio_callback_t d_cb, void *d_cbpriv);
 
+  bool need_alloc_submit_sync() const override { return !io_to_ng; }
+
   void aio_submit(IOContext *ioc) override;
   void discard_drain() override;
 

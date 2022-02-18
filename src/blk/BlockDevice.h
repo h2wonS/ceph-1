@@ -93,6 +93,10 @@ public:
 #endif
   std::atomic_int num_pending = {0};
   std::atomic_int num_running = {0};
+  struct addr_t {
+    uint64_t offset = -1, length = -1;
+  };
+  std::list<addr_t> post_addrs;
   bool allow_eio;
 
   explicit IOContext(CephContext* cct, void *p, bool allow_eio = false)
@@ -196,6 +200,7 @@ public:
   virtual bool is_rotational() { return rotational; }
 
   // HM-SMR-specific calls
+  virtual bool need_alloc_submit_sync() const { return false; }
   virtual bool is_smr() const { return false; }
   virtual uint64_t get_zone_size() const {
     ceph_assert(is_smr());

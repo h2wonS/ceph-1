@@ -72,8 +72,8 @@ struct uring_priv_t {
 static const uint32_t IORING_OP_URING_CMD = 40;
 
 static void post_process_append(aio_t *io, uring_priv_t *uring_priv) {
-  ceph_assert(io->origin != NULL);
-  io->origin->post_offset = uring_priv->io_cmd.common.result * BLK_SIZE;
+  ceph_assert(io->post_offset_ptr != NULL);
+  (*io->post_offset_ptr) = uring_priv->io_cmd.common.result * BLK_SIZE;
 }
 
 static int ioring_get_cqe(struct ioring_data *d, unsigned int max,

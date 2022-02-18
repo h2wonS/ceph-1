@@ -53,14 +53,18 @@ static void hmsmr_cb(void* priv, void* priv2)
 
   if (aio->iocb.aio_lio_opcode == IO_CMD_PWRITEV) {
     uint64_t zone = get_zone(aio->offset, bdev->get_zone_size());
-    uint64_t post_zone = get_zone(aio->origin->post_offset, bdev->get_zone_size());
-    ceph_assert(zone == post_zone);
-    bdev->do_aio_submit(zone, true);
+    if (bdev->need_alloc_submit_sync()) {
+      bdev->do_aio_submit(zone, true);
+    } else {
+      uint64_t post_zone = get_zone(*aio->post_offset_ptr, bdev->get_zone_size());
+      ceph_assert(zone == post_zone);
+    }
   }
 
   if (ioc->num_pending == 0 && ioc->num_running == 0) {
     casted_priv->cb(casted_priv->cbpriv, ioc->priv);
     ioc->pending_aios.clear();
+    ioc->post_addrs.clear();
   }
 }
 
@@ -197,16 +201,26 @@ void HMSMRDevice::aio_submit(IOContext* ioc) {
         ++pending_aio) {
       uint64_t zone = get_zone(pending_aio->offset, zone_size);
       pending_aio->priv = static_cast<IOContext*>(ioc);
-      std::lock_guard lock(pending_ios[zone].lock);
-      aio_t aio_to_push = *pending_aio;
-      aio_to_push.origin = &*pending_aio;
-      pending_ios[zone].aios.push_back(aio_to_push);
-      requested_zones.push_back(zone);
+      if (need_alloc_submit_sync()) {
+        std::lock_guard lock(pending_ios[zone].lock);
+        aio_t aio_to_push = *pending_aio;
+        pending_ios[zone].aios.push_back(aio_to_push);
+        requested_zones.push_back(zone);
+      } else {
+        IOContext::addr_t addr_to_push = {.length = pending_aio->length};
+        ioc->post_addrs.push_back(addr_to_push);
+        pending_aio->post_offset_ptr = &(ioc->post_addrs.back().offset);
+        pending_aio->offset = zone * zone_size;
+      }
     }
-    for (auto zone = requested_zones.begin();
-        zone != requested_zones.end();
-        ++zone) {
-      do_aio_submit(*zone, false);
+    if (need_alloc_submit_sync()) {
+      for (auto zone = requested_zones.begin();
+          zone != requested_zones.end();
+          ++zone) {
+        do_aio_submit(*zone, false);
+      }
+    } else {
+      KernelDevice::aio_submit(ioc);
     }
   }
   else {
@@ -234,8 +248,10 @@ void HMSMRDevice::do_aio_submit(uint64_t zone, bool completed) {
   }
 
   auto pending_aio = pending_ios[zone].aios.begin();
-  dout(10) << __func__ << " offset " << pending_aio->offset << " to zone aligned " << zone * zone_size << dendl;
-  pending_aio->offset = zone * zone_size;
+  if (need_alloc_submit_sync() == false) {
+    dout(10) << __func__ << " offset " << pending_aio->offset << " to zone aligned " << zone * zone_size << dendl;
+    pending_aio->offset = zone * zone_size;
+  }
   auto ioc = static_cast<IOContext*>(pending_aio->priv);
   dout(10) << __func__ << " target pending ioc" <<  ioc <<  dendl;
 

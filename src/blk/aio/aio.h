@@ -30,10 +30,10 @@ struct aio_t {
   int n_aiocb;
 #endif
   void *priv;
-  aio_t* origin = NULL;
+  uint64_t *post_offset_ptr = NULL;
   int fd;
   boost::container::small_vector<iovec,4> iov;
-  uint64_t offset, length, post_offset = 0;
+  uint64_t offset, length;
   long rval;
   ceph::buffer::list bl;  ///< write payload (so that it remains stable for duration)
 
