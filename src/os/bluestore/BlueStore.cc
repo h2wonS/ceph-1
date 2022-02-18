@@ -5987,6 +5987,9 @@ int BlueStore::_minimal_open_bluefs(bool create)
 
   // shared device
   bfn = path + "/block";
+  if (cct->_conf->contains("bluestore_cns_path")) {
+    bfn = cct->_conf->bluestore_cns_path;
+  }
   // never trim here
   r = bluefs->add_block_device(bluefs_layout.shared_bdev, bfn, false,
                                0, // no need to provide valid 'reserved' for shared dev

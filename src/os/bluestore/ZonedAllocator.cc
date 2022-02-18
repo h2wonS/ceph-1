@@ -158,6 +158,12 @@ int64_t ZonedAllocator::pick_zone_to_clean(float min_score, uint64_t min_saved)
   int32_t best = -1;
   float best_score = 0.0;
   for (size_t i = first_seq_zone_num; i < num_zones; ++i) {
+    if (zone_states[i].write_pointer < zone_size) {
+      continue;
+    }
+    if (zone_states[i].write_pointer == 0) {
+      continue;
+    }
     // value (score) = benefit / cost
     //    benefit = how much net free space we'll get (dead bytes)
     //    cost = how many bytes we'll have to rewrite (live bytes)
